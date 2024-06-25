@@ -1,9 +1,18 @@
 const http = require('http');
 const url = require('url');
 const mysql = require('mysql2');
+const TelegramBot = require('node-telegram-bot-api');
 
 const hostname = '127.0.0.1';
 const port = 3000;
+
+const token = '7247482385:AAHEnSplHM4g5mD6IWCimFAV-gQMepmfWKQ';  
+const bot = new TelegramBot(token, {polling: true});
+
+bot.onText(/\/start/, (msg) => {
+  const chatId = msg.chat.id;
+  bot.sendMessage(chatId, 'Привет, октагон!');
+});
 
 const connection = mysql.createConnection({
   host: 'localhost',
@@ -130,3 +139,4 @@ const server = http.createServer((req, res) => {
 server.listen(port, hostname, () => {
   console.log(`Server running at http://${hostname}:${port}/`);
 });
+
