@@ -5,91 +5,124 @@ const mysql = require('mysql2');
 const hostname = '127.0.0.1';
 const port = 3000;
 
-const db = mysql.createConnection({
+const connection = mysql.createConnection({
   host: 'localhost',
-  user: 'root',  // или ваш пользователь базы данных
-  password: '',  // или ваш пароль базы данных
+  user: 'root',
+  password: '',
   database: 'ChatBotTests'
 });
 
-db.connect((err) => {
+connection.connect((err) => {
   if (err) {
-    console.error('Ошибка подключения к базе данных:', err.stack);
+    console.error('Error connecting to the database:', err.stack);
     return;
   }
-  console.log('Подключение к базе данных успешно выполнено');
+  console.log('Connected to the database');
 });
+
+const handleGetAllItems = (req, res) => {
+  connection.query('SELECT * FROM Items', (error, results) => {
+    if (error) {
+      res.statusCode = 500;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ error: 'Database error' }));
+      return;
+    }
+    res.statusCode = 200;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify(results));
+  });
+};
+
+const handleAddItem = (req, res) => {
+  const query = url.parse(req.url, true).query;
+  const { name, desc } = query;
+
+  if (!name || !desc) {
+    res.statusCode = 400;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ error: 'Invalid parameters' }));
+    return;
+  }
+
+  connection.query('INSERT INTO Items (name, `desc`) VALUES (?, ?)', [name, desc], (error, results) => {
+    if (error) {
+      res.statusCode = 500;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ error: 'Database error' }));
+      return;
+    }
+    res.statusCode = 200;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ id: results.insertId, name, desc }));
+  });
+};
+
+const handleDeleteItem = (req, res) => {
+  const query = url.parse(req.url, true).query;
+  const { id } = query;
+
+  if (!id || isNaN(parseInt(id))) {
+    res.statusCode = 400;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ error: 'Invalid parameters' }));
+    return;
+  }
+
+  connection.query('DELETE FROM Items WHERE id = ?', [id], (error, results) => {
+    if (error) {
+      res.statusCode = 500;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ error: 'Database error' }));
+      return;
+    }
+    res.statusCode = 200;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ id }));
+  });
+};
+
+const handleUpdateItem = (req, res) => {
+  const query = url.parse(req.url, true).query;
+  const { id, name, desc } = query;
+
+  if (!id || isNaN(parseInt(id)) || !name || !desc) {
+    res.statusCode = 400;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ error: 'Invalid parameters' }));
+    return;
+  }
+
+  connection.query('UPDATE Items SET name = ?, `desc` = ? WHERE id = ?', [name, desc, id], (error, results) => {
+    if (error) {
+      res.statusCode = 500;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ error: 'Database error' }));
+      return;
+    }
+    res.statusCode = 200;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ id, name, desc }));
+  });
+};
+
+const routes = {
+  '/getAllItems': handleGetAllItems,
+  '/addItem': handleAddItem,
+  '/deleteItem': handleDeleteItem,
+  '/updateItem': handleUpdateItem
+};
 
 const server = http.createServer((req, res) => {
   const parsedUrl = url.parse(req.url, true);
   const pathname = parsedUrl.pathname;
-  const query = parsedUrl.query;
 
-  res.setHeader('Content-Type', 'application/json');
-
-  if (pathname === '/getAllItems') {
-    db.query('SELECT * FROM Items', (err, results) => {
-      if (err) {
-        res.statusCode = 500;
-        res.end(JSON.stringify({ error: 'Database error' }));
-        return;
-      }
-      res.statusCode = 200;
-      res.end(JSON.stringify(results));
-    });
-  } else if (pathname === '/addItem' && req.method === 'POST') {
-    const name = query.name;
-    const desc = query.desc;
-    if (name && desc) {
-      db.query('INSERT INTO Items (name, `desc`) VALUES (?, ?)', [name, desc], (err, results) => {
-        if (err) {
-          res.statusCode = 500;
-          res.end(JSON.stringify({ error: 'Database error' }));
-          return;
-        }
-        res.statusCode = 200;
-        res.end(JSON.stringify({ id: results.insertId, name, desc }));
-      });
-    } else {
-      res.statusCode = 400;
-      res.end(JSON.stringify(null));
-    }
-  } else if (pathname === '/deleteItem' && req.method === 'POST') {
-    const id = parseInt(query.id);
-    if (!isNaN(id)) {
-      db.query('DELETE FROM Items WHERE id = ?', [id], (err, results) => {
-        if (err) {
-          res.statusCode = 500;
-          res.end(JSON.stringify({ error: 'Database error' }));
-          return;
-        }
-        res.statusCode = 200;
-        res.end(JSON.stringify(results.affectedRows > 0 ? {} : null));
-      });
-    } else {
-      res.statusCode = 400;
-      res.end(JSON.stringify(null));
-    }
-  } else if (pathname === '/updateItem' && req.method === 'POST') {
-    const id = parseInt(query.id);
-    const name = query.name;
-    const desc = query.desc;
-    if (!isNaN(id) && name && desc) {
-      db.query('UPDATE Items SET name = ?, `desc` = ? WHERE id = ?', [name, desc, id], (err, results) => {
-        if (err) {
-          res.statusCode = 500;
-          res.end(JSON.stringify({ error: 'Database error' }));
-          return;
-        }
-        res.statusCode = 200;
-        res.end(JSON.stringify(results.affectedRows > 0 ? { id, name, desc } : {}));
-      });
-    } else {
-      res.statusCode = 400;
-      res.end(JSON.stringify(null));
-    }
+  const routeHandler = routes[pathname];
+  if (routeHandler) {
+    routeHandler(req, res);
   } else {
     res.statusCode = 404;
+    res.setHeader('Content-Type', 'application/json');
     res.end(JSON.stringify({ error: 'Not found' }));
   }
 });
