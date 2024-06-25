@@ -3,161 +3,116 @@ const url = require('url');
 const mysql = require('mysql2');
 const TelegramBot = require('node-telegram-bot-api');
 
-const hostname = '127.0.0.1';
-const port = 3000;
+// Укажите ваш токен Телеграм бота
+const token = '7247482385:AAHEnSplHM4g5mD6IWCimFAV-gQMepmfWKQ';
 
-const token = '7247482385:AAHEnSplHM4g5mD6IWCimFAV-gQMepmfWKQ';  
+// Создание бота
 const bot = new TelegramBot(token, { polling: true });
 
-bot.onText(/\/start/, (msg) => {
-  const chatId = msg.chat.id;
-  bot.sendMessage(chatId, 'Привет, октагон!');
+// Подключение к базе данных
+const connection = mysql.createConnection({
+    host: 'localhost',
+    user: 'root',
+    password: '',
+    database: 'ChatBotTests'
 });
 
+connection.connect(err => {
+    if (err) {
+        console.error('Error connecting to the database:', err);
+        return;
+    }
+    console.log('Connected to the database');
+});
+
+// Команда /start
+bot.onText(/\/start/, (msg) => {
+    bot.sendMessage(msg.chat.id, 'Привет, октагон!');
+});
+
+// Команда /help
 bot.onText(/\/help/, (msg) => {
-  const chatId = msg.chat.id;
-  const helpMessage = `
-    Список доступных команд:
+    const helpMessage = `Список доступных команд:
     /help - возвращает список команд с их описанием
     /site - отправляет в чат ссылку на сайт октагона
     /creator - отправляет в чат ваше ФИО
-  `;
-  bot.sendMessage(chatId, helpMessage);
+    /randomItem - возвращает случайный предмет
+    /deleteItem - удаляет предмет из БД по ID
+    /getItemByID - возвращает предмет из БД по ID`;
+    bot.sendMessage(msg.chat.id, helpMessage);
 });
 
+// Команда /site
 bot.onText(/\/site/, (msg) => {
-  const chatId = msg.chat.id;
-  bot.sendMessage(chatId, 'https://octagon.ru');
+    bot.sendMessage(msg.chat.id, 'https://octagon.ru');
 });
 
+// Команда /creator
 bot.onText(/\/creator/, (msg) => {
-  const chatId = msg.chat.id;
-  bot.sendMessage(chatId, 'Stepan Porozov');
+    bot.sendMessage(msg.chat.id, 'Stepan Porozov');
 });
 
-const connection = mysql.createConnection({
-  host: 'localhost',
-  user: 'root',
-  password: '',
-  database: 'ChatBotTests'
+// Команда /randomItem
+bot.onText(/\/randomItem/, (msg) => {
+    const query = 'SELECT * FROM Items ORDER BY RAND() LIMIT 1';
+    connection.query(query, (err, results) => {
+        if (err) {
+            bot.sendMessage(msg.chat.id, 'Ошибка при получении случайного предмета');
+            return;
+        }
+        if (results.length > 0) {
+            const item = results[0];
+            bot.sendMessage(msg.chat.id, `(${item.id}) - ${item.name}: ${item.desc}`);
+        } else {
+            bot.sendMessage(msg.chat.id, 'Предметы не найдены');
+        }
+    });
 });
 
-connection.connect((err) => {
-  if (err) {
-    console.error('Error connecting to the database:', err.stack);
-    return;
-  }
-  console.log('Connected to the database');
+// Команда /deleteItem
+bot.onText(/\/deleteItem (.+)/, (msg, match) => {
+    const itemId = match[1];
+    const query = 'DELETE FROM Items WHERE id = ?';
+    connection.query(query, [itemId], (err, result) => {
+        if (err) {
+            bot.sendMessage(msg.chat.id, 'Ошибка при удалении предмета');
+            return;
+        }
+        if (result.affectedRows > 0) {
+            bot.sendMessage(msg.chat.id, 'Удачно');
+        } else {
+            bot.sendMessage(msg.chat.id, 'Ошибка');
+        }
+    });
 });
 
-const handleGetAllItems = (req, res) => {
-  connection.query('SELECT * FROM Items', (error, results) => {
-    if (error) {
-      res.statusCode = 500;
-      res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify({ error: 'Database error' }));
-      return;
-    }
-    res.statusCode = 200;
-    res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify(results));
-  });
-};
+// Команда /getItemByID
+bot.onText(/\/getItemByID (.+)/, (msg, match) => {
+    const itemId = match[1];
+    const query = 'SELECT * FROM Items WHERE id = ?';
+    connection.query(query, [itemId], (err, results) => {
+        if (err) {
+            bot.sendMessage(msg.chat.id, 'Ошибка при получении предмета');
+            return;
+        }
+        if (results.length > 0) {
+            const item = results[0];
+            bot.sendMessage(msg.chat.id, `(${item.id}) - ${item.name}: ${item.desc}`);
+        } else {
+            bot.sendMessage(msg.chat.id, '{}');
+        }
+    });
+});
 
-const handleAddItem = (req, res) => {
-  const query = url.parse(req.url, true).query;
-  const { name, desc } = query;
-
-  if (!name || !desc) {
-    res.statusCode = 400;
-    res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify({ error: 'Invalid parameters' }));
-    return;
-  }
-
-  connection.query('INSERT INTO Items (name, `desc`) VALUES (?, ?)', [name, desc], (error, results) => {
-    if (error) {
-      res.statusCode = 500;
-      res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify({ error: 'Database error' }));
-      return;
-    }
-    res.statusCode = 200;
-    res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify({ id: results.insertId, name, desc }));
-  });
-};
-
-const handleDeleteItem = (req, res) => {
-  const query = url.parse(req.url, true).query;
-  const { id } = query;
-
-  if (!id || isNaN(parseInt(id))) {
-    res.statusCode = 400;
-    res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify({ error: 'Invalid parameters' }));
-    return;
-  }
-
-  connection.query('DELETE FROM Items WHERE id = ?', [id], (error, results) => {
-    if (error) {
-      res.statusCode = 500;
-      res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify({ error: 'Database error' }));
-      return;
-    }
-    res.statusCode = 200;
-    res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify({ id }));
-  });
-};
-
-const handleUpdateItem = (req, res) => {
-  const query = url.parse(req.url, true).query;
-  const { id, name, desc } = query;
-
-  if (!id || isNaN(parseInt(id)) || !name || !desc) {
-    res.statusCode = 400;
-    res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify({ error: 'Invalid parameters' }));
-    return;
-  }
-
-  connection.query('UPDATE Items SET name = ?, `desc` = ? WHERE id = ?', [name, desc, id], (error, results) => {
-    if (error) {
-      res.statusCode = 500;
-      res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify({ error: 'Database error' }));
-      return;
-    }
-    res.statusCode = 200;
-    res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify({ id, name, desc }));
-  });
-};
-
-const routes = {
-  '/getAllItems': handleGetAllItems,
-  '/addItem': handleAddItem,
-  '/deleteItem': handleDeleteItem,
-  '/updateItem': handleUpdateItem
-};
-
+// Запуск сервера
 const server = http.createServer((req, res) => {
-  const parsedUrl = url.parse(req.url, true);
-  const pathname = parsedUrl.pathname;
-
-  const routeHandler = routes[pathname];
-  if (routeHandler) {
-    routeHandler(req, res);
-  } else {
-    res.statusCode = 404;
-    res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify({ error: 'Not found' }));
-  }
+    res.statusCode = 200;
+    res.setHeader('Content-Type', 'text/html');
+    res.end('<h1>Привет, Октагон!</h1>');
 });
 
-server.listen(port, hostname, () => {
-  console.log(`Server running at http://${hostname}:${port}/`);
+server.listen(3000, '127.0.0.1', () => {
+    console.log('Server running at http://127.0.0.1:3000/');
 });
+
 
