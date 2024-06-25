@@ -7,11 +7,32 @@ const hostname = '127.0.0.1';
 const port = 3000;
 
 const token = '7247482385:AAHEnSplHM4g5mD6IWCimFAV-gQMepmfWKQ';  
-const bot = new TelegramBot(token, {polling: true});
+const bot = new TelegramBot(token, { polling: true });
 
 bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;
   bot.sendMessage(chatId, 'Привет, октагон!');
+});
+
+bot.onText(/\/help/, (msg) => {
+  const chatId = msg.chat.id;
+  const helpMessage = `
+    Список доступных команд:
+    /help - возвращает список команд с их описанием
+    /site - отправляет в чат ссылку на сайт октагона
+    /creator - отправляет в чат ваше ФИО
+  `;
+  bot.sendMessage(chatId, helpMessage);
+});
+
+bot.onText(/\/site/, (msg) => {
+  const chatId = msg.chat.id;
+  bot.sendMessage(chatId, 'https://octagon.ru');
+});
+
+bot.onText(/\/creator/, (msg) => {
+  const chatId = msg.chat.id;
+  bot.sendMessage(chatId, 'Stepan Porozov');
 });
 
 const connection = mysql.createConnection({
